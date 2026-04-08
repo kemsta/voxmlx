@@ -5,6 +5,8 @@ class RotatingKVCache:
     step = 256
 
     def __init__(self, max_size):
+        if max_size <= 0:
+            raise ValueError("max_size must be positive")
         self.keys = None
         self.values = None
         self._offset = 0
@@ -37,7 +39,12 @@ class RotatingKVCache:
             return v[..., : self._idx, :]
 
     def _update_concat(self, keys, values):
+        added = keys.shape[2]
         if self.keys is None:
+            if added > self.max_size:
+                trim_size = added - self.max_size
+                keys = keys[..., trim_size:, :]
+                values = values[..., trim_size:, :]
             self.keys = keys
             self.values = values
         else:
@@ -45,10 +52,10 @@ class RotatingKVCache:
             self.values = self._temporal_order(self.values)
             self._idx = self.keys.shape[2]
 
-            trim_size = self._idx - self.max_size + 1
+            trim_size = max(0, self._idx + added - self.max_size)
             self.keys = self._trim(trim_size, self.keys, keys)
             self.values = self._trim(trim_size, self.values, values)
-        self._offset += keys.shape[2]
+        self._offset += added
         self._idx = self.keys.shape[2]
         return self.keys, self.values
 
